@@ -1,0 +1,1847 @@
+```html
+<!DOCTYPE html>
+<html lang="ko" class="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+  <title>AI 포토 스튜디오</title>
+
+  <!-- Android / Mobile PWA 메타 태그 -->
+  <meta name="theme-color" content="#0B0D12" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="AI 포토" />
+
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+
+  <!-- Google Fonts: Inter & Noto Sans KR -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+KR:wght@400;500;600;700&display=swap" rel="stylesheet" />
+
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Inter', 'Noto Sans KR', 'sans-serif'],
+          },
+          colors: {
+            surface: {
+              950: '#0B0D12',
+              900: '#121620',
+              800: '#1A202E',
+              700: '#252D3F',
+            }
+          }
+        }
+      }
+    };
+  </script>
+
+  <style>
+    /* 기본 레이아웃 및 모바일 터치 최적화 */
+    html, body {
+      height: 100%;
+      width: 100%;
+      margin: 0;
+      padding: 0;
+      overflow: hidden;
+      background-color: #0B0D12;
+      color: #F1F5F9;
+      overscroll-behavior: none;
+      -webkit-tap-highlight-color: transparent;
+      touch-action: manipulation;
+    }
+
+    /* 가로 스크롤바 숨김 */
+    .no-scrollbar::-webkit-scrollbar {
+      display: none;
+    }
+    .no-scrollbar {
+      -ms-overflow-style: none;
+      scrollbar-width: none;
+    }
+
+    /* 커스텀 모바일 레인지 슬라이더 */
+    input[type="range"] {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 100%;
+      height: 6px;
+      border-radius: 9999px;
+      background: #252D3F;
+      outline: none;
+    }
+    input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 22px;
+      height: 22px;
+      border-radius: 9999px;
+      background: #6366F1;
+      border: 3px solid #FFFFFF;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.5);
+      cursor: pointer;
+    }
+    input[type="range"]::-moz-range-thumb {
+      width: 22px;
+      height: 22px;
+      border-radius: 9999px;
+      background: #6366F1;
+      border: 3px solid #FFFFFF;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.5);
+      cursor: pointer;
+    }
+
+    /* 체크무늬 투명 배경 (배경 제거 등 확인용) */
+    .checker-bg {
+      background-image:
+        linear-gradient(45deg, #161b26 25%, transparent 25%),
+        linear-gradient(-45deg, #161b26 25%, transparent 25%),
+        linear-gradient(45deg, transparent 75%, #161b26 75%),
+        linear-gradient(-45deg, transparent 75%, #161b26 75%);
+      background-size: 16px 16px;
+      background-position: 0 0, 0 8px, 8px -8px, -8px 0;
+    }
+
+    /* AI 로딩 링 애니메이션 */
+    @keyframes spinSlow {
+      to { transform: rotate(360deg); }
+    }
+    .animate-spin-slow {
+      animation: spinSlow 1.4s linear infinite;
+    }
+  </style>
+</head>
+<body class="h-[100dvh] w-full flex flex-col bg-surface-950 text-slate-100 select-none font-sans">
+
+  <!-- 숨겨진 파일 입력 (안드로이드에서 갤러리/카메라 자동 선택 지원) -->
+  <input id="fileInput" type="file" accept="image/*" class="hidden" />
+
+  <!-- ===================== 1. 상단 툴바 ===================== -->
+  <header class="shrink-0 h-14 px-3 flex items-center justify-between bg-surface-950/95 border-b border-white/10 z-30">
+    <!-- 좌측: 사진 열기 버튼 -->
+    <div class="flex items-center gap-1.5">
+      <button id="btnOpenPhoto" type="button"
+        class="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-surface-800 hover:bg-surface-700 active:scale-95 transition text-xs font-medium text-slate-200">
+        <svg class="w-4 h-4 text-indigo-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+        </svg>
+        <span>열기</span>
+      </button>
+    </div>
+
+    <!-- 중앙: 실행 취소 / 다시 실행 / 원본 비교 -->
+    <div class="flex items-center gap-1">
+      <button id="btnUndo" type="button" disabled title="실행 취소"
+        class="p-2.5 rounded-xl text-slate-300 hover:bg-surface-800 disabled:opacity-30 active:scale-95 transition">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" />
+        </svg>
+      </button>
+      <button id="btnRedo" type="button" disabled title="다시 실행"
+        class="p-2.5 rounded-xl text-slate-300 hover:bg-surface-800 disabled:opacity-30 active:scale-95 transition">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M21 10h-10a8 8 0 00-8 8v2M21 10l-6 6m6-6l-6-6" />
+        </svg>
+      </button>
+      <button id="btnCompare" type="button" disabled title="길게 눌러 원본 비교"
+        class="p-2.5 rounded-xl text-slate-300 hover:bg-surface-800 disabled:opacity-30 active:bg-indigo-600/30 transition">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+          <path stroke-linecap="round" stroke-linejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+        </svg>
+      </button>
+    </div>
+
+    <!-- 우측: 설정(PWA/API) 및 저장 -->
+    <div class="flex items-center gap-1.5">
+      <button id="btnSettings" type="button" title="설정 및 앱 설치 방법"
+        class="p-2.5 rounded-xl text-slate-300 hover:bg-surface-800 active:scale-95 transition">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+          <path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+        </svg>
+      </button>
+      <button id="btnExport" type="button" disabled
+        class="px-3.5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 disabled:opacity-40 disabled:bg-surface-700 active:scale-95 transition text-xs font-semibold text-white shadow-lg shadow-indigo-600/25">
+        저장
+      </button>
+    </div>
+  </header>
+
+  <!-- ===================== 2. 메인 캔버스 뷰포트 ===================== -->
+  <main id="canvasContainer" class="relative flex-1 w-full flex items-center justify-center overflow-hidden p-3 bg-surface-950">
+
+    <!-- 초기 빈 화면 (사진 미선택 시) -->
+    <div id="emptyState" class="w-full max-w-sm p-6 rounded-3xl bg-surface-900/90 border border-white/10 text-center shadow-2xl">
+      <div class="w-16 h-16 mx-auto mb-4 rounded-2xl bg-gradient-to-br from-indigo-500 to-violet-600 flex items-center justify-center shadow-lg shadow-indigo-500/30">
+        <svg class="w-8 h-8 text-white" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09zM18.259 8.715L18 9.75l-.259-1.035a3.375 3.375 0 00-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 002.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 002.456 2.456L21.75 6l-1.035.259a3.375 3.375 0 00-2.456 2.456z" />
+        </svg>
+      </div>
+      <h1 class="text-lg font-bold text-white mb-1.5">AI 포토 스튜디오</h1>
+      <p class="text-xs text-slate-400 leading-relaxed mb-6">
+        안드로이드 PWA 전용 나만의 AI 사진 편집기.<br />
+        갤러리에서 사진을 불러와 바로 보정해 보세요.
+      </p>
+
+      <div class="space-y-2.5">
+        <button id="btnEmptyUpload" type="button"
+          class="w-full py-3.5 px-4 rounded-2xl bg-indigo-600 hover:bg-indigo-500 active:scale-[0.98] transition font-semibold text-sm text-white flex items-center justify-center gap-2 shadow-lg shadow-indigo-600/30">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4" />
+          </svg>
+          <span>갤러리 / 카메라에서 사진 선택</span>
+        </button>
+
+        <button id="btnLoadSample" type="button"
+          class="w-full py-3 px-4 rounded-2xl bg-surface-800 hover:bg-surface-700 active:scale-[0.98] transition font-medium text-xs text-slate-300 border border-white/5">
+          🌄 샘플 사진으로 먼저 체험해 보기
+        </button>
+      </div>
+
+      <div class="mt-5 pt-4 border-t border-white/5 flex flex-wrap justify-center gap-1.5 text-[11px] text-slate-400">
+        <span class="px-2.5 py-1 rounded-full bg-surface-800">✨ AI 매직 편집</span>
+        <span class="px-2.5 py-1 rounded-full bg-surface-800">🪄 자동 보정</span>
+        <span class="px-2.5 py-1 rounded-full bg-surface-800">🎞️ 감성 필터</span>
+        <span class="px-2.5 py-1 rounded-full bg-surface-800">✂️ 자르기</span>
+      </div>
+    </div>
+
+    <!-- 캔버스 래퍼 (사진 로드 후 표시) -->
+    <div id="canvasWrapper" class="hidden relative flex items-center justify-center max-w-full max-h-full rounded-xl overflow-hidden shadow-2xl checker-bg">
+      <canvas id="editorCanvas" class="block rounded-xl"></canvas>
+
+      <!-- 원본 비교 배지 -->
+      <div id="originalBadge" class="hidden absolute top-3 left-3 px-3 py-1 rounded-full bg-black/75 backdrop-blur-md text-xs font-semibold text-amber-300 border border-amber-400/30 pointer-events-none">
+        원본 보기
+      </div>
+
+      <!-- 인터랙티브 자르기 오버레이 (자르기 탭 활성화 시) -->
+      <div id="cropOverlay" class="hidden absolute inset-0 bg-black/55 touch-none">
+        <div id="cropBox" class="absolute border-2 border-white shadow-[0_0_0_9999px_rgba(0,0,0,0.55)] cursor-move touch-none">
+          <!-- 3분할 가이드라인 -->
+          <div class="w-full h-full grid grid-cols-3 grid-rows-3 pointer-events-none">
+            <div class="border-r border-b border-white/35"></div>
+            <div class="border-r border-b border-white/35"></div>
+            <div class="border-b border-white/35"></div>
+            <div class="border-r border-b border-white/35"></div>
+            <div class="border-r border-b border-white/35"></div>
+            <div class="border-b border-white/35"></div>
+            <div class="border-r border-white/35"></div>
+            <div class="border-r border-white/35"></div>
+            <div></div>
+          </div>
+          <!-- 네 모서리 강조 마커 -->
+          <div class="absolute -top-1 -left-1 w-3.5 h-3.5 border-t-4 border-l-4 border-indigo-400 pointer-events-none"></div>
+          <div class="absolute -top-1 -right-1 w-3.5 h-3.5 border-t-4 border-r-4 border-indigo-400 pointer-events-none"></div>
+          <div class="absolute -bottom-1 -left-1 w-3.5 h-3.5 border-b-4 border-l-4 border-indigo-400 pointer-events-none"></div>
+          <div class="absolute -bottom-1 -right-1 w-3.5 h-3.5 border-b-4 border-r-4 border-indigo-400 pointer-events-none"></div>
+        </div>
+      </div>
+
+      <!-- 인터랙티브 텍스트 미리보기 오버레이 (텍스트 탭 활성화 시) -->
+      <div id="textOverlay" class="hidden absolute inset-0 overflow-hidden touch-none">
+        <div id="draggableText"
+          class="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 px-3 py-1 rounded-lg cursor-move touch-none font-bold whitespace-nowrap border border-dashed border-white/60 shadow-lg">
+        </div>
+      </div>
+    </div>
+
+    <!-- AI 처리 로딩 오버레이 -->
+    <div id="aiLoadingOverlay" class="hidden absolute inset-0 bg-black/70 backdrop-blur-sm z-40 flex flex-col items-center justify-center p-6 text-center">
+      <div class="relative w-14 h-14 mb-4">
+        <div class="absolute inset-0 rounded-full border-4 border-indigo-500/20"></div>
+        <div class="absolute inset-0 rounded-full border-4 border-transparent border-t-indigo-400 border-r-violet-400 animate-spin-slow"></div>
+        <div class="absolute inset-0 flex items-center justify-center text-lg">✨</div>
+      </div>
+      <p id="aiLoadingTitle" class="text-sm font-semibold text-white mb-1">AI가 사진을 편집하고 있어요</p>
+      <p id="aiLoadingDesc" class="text-xs text-slate-300">잠시만 기다려 주세요...</p>
+    </div>
+
+    <!-- 토스트 메시지 (alert 대체) -->
+    <div id="toastContainer" class="fixed top-16 left-1/2 -translate-x-1/2 z-50 pointer-events-none w-[90%] max-w-sm flex flex-col items-center gap-2"></div>
+  </main>
+
+  <!-- ===================== 3. 도구 컨트롤 패널 ===================== -->
+  <section id="toolPanel" class="shrink-0 bg-surface-900 border-t border-white/10 px-3 pt-2.5 pb-2 z-20 transition-all">
+
+    <!-- (1) AI 매직 패널 -->
+    <div id="panel-ai" class="tool-content space-y-2.5">
+      <!-- 원클릭 AI 자동 보정 & 프리셋 칩 -->
+      <div class="flex items-center gap-2 overflow-x-auto no-scrollbar pb-0.5">
+        <button id="btnAiAutoEnhance" type="button"
+          class="shrink-0 flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-500 hover:to-violet-500 active:scale-95 transition text-xs font-semibold text-white shadow-md shadow-indigo-600/25">
+          <span>🪄</span>
+          <span>AI 자동 보정</span>
+        </button>
+
+        <button type="button" data-ai-prompt="Enhance portrait lighting, smooth skin naturally, and make the photo look like a crisp studio shot while preserving the person's identity."
+          class="ai-preset-btn shrink-0 px-3 py-2 rounded-xl bg-surface-800 hover:bg-surface-700 active:scale-95 transition text-xs font-medium text-slate-200 border border-white/5">
+          ✨ 인물 보정
+        </button>
+        <button type="button" data-ai-prompt="Keep the main subject sharp and in focus, and apply a natural DSLR shallow depth-of-field bokeh blur to the background."
+          class="ai-preset-btn shrink-0 px-3 py-2 rounded-xl bg-surface-800 hover:bg-surface-700 active:scale-95 transition text-xs font-medium text-slate-200 border border-white/5">
+          📷 배경 흐림
+        </button>
+        <button type="button" data-ai-prompt="Transform the weather and lighting into a bright, clear sunny golden hour sky with warm natural sunlight."
+          class="ai-preset-btn shrink-0 px-3 py-2 rounded-xl bg-surface-800 hover:bg-surface-700 active:scale-95 transition text-xs font-medium text-slate-200 border border-white/5">
+          ☀️ 날씨 맑게
+        </button>
+        <button type="button" data-ai-prompt="Cleanly remove the background and place the main subject on a pure clean white studio background with soft natural ground shadow."
+          class="ai-preset-btn shrink-0 px-3 py-2 rounded-xl bg-surface-800 hover:bg-surface-700 active:scale-95 transition text-xs font-medium text-slate-200 border border-white/5">
+          ✂️ 배경 제거
+        </button>
+        <button type="button" data-ai-prompt="Restyle this entire photo into a warm, hand-painted Japanese anime scenery illustration with soft watercolor textures and vibrant sky."
+          class="ai-preset-btn shrink-0 px-3 py-2 rounded-xl bg-surface-800 hover:bg-surface-700 active:scale-95 transition text-xs font-medium text-slate-200 border border-white/5">
+          🎨 감성 일러스트
+        </button>
+        <button type="button" data-ai-prompt="Convert this photo into a moody 35mm analog cinema film photograph with rich teal shadows, warm highlights, and subtle natural film grain."
+          class="ai-preset-btn shrink-0 px-3 py-2 rounded-xl bg-surface-800 hover:bg-surface-700 active:scale-95 transition text-xs font-medium text-slate-200 border border-white/5">
+          🎞️ 시네마 필름
+        </button>
+      </div>
+
+      <!-- 자유 AI 프롬프트 입력창 -->
+      <div class="flex items-center gap-2">
+        <input id="aiPromptInput" type="text" placeholder="AI에게 원하는 편집을 말해 보세요 (예: 뒤의 사람 지워줘)"
+          class="flex-1 min-w-0 px-3.5 py-2.5 rounded-xl bg-surface-950 border border-white/10 focus:border-indigo-500 focus:outline-none text-xs text-white placeholder-slate-500" />
+        <button id="btnAiPromptRun" type="button"
+          class="shrink-0 px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 active:scale-95 transition text-xs font-semibold text-white">
+          적용
+        </button>
+      </div>
+    </div>
+
+    <!-- (2) 필터 패널 -->
+    <div id="panel-filter" class="tool-content hidden space-y-2.5">
+      <div id="filterList" class="flex items-center gap-2 overflow-x-auto no-scrollbar pb-0.5">
+        <!-- JS에서 필터 칩 동적 생성 -->
+      </div>
+      <div class="flex items-center gap-3 px-1">
+        <span class="text-[11px] text-slate-400 shrink-0 w-10">강도</span>
+        <input id="filterIntensitySlider" type="range" min="0" max="100" value="100" class="flex-1" />
+        <span id="filterIntensityVal" class="text-[11px] font-mono text-indigo-300 w-9 text-right">100%</span>
+      </div>
+    </div>
+
+    <!-- (3) 세부 보정 패널 -->
+    <div id="panel-adjust" class="tool-content hidden space-y-2.5">
+      <!-- 보정 항목 선택 바 -->
+      <div id="adjustList" class="flex items-center gap-1.5 overflow-x-auto no-scrollbar pb-0.5">
+        <!-- JS에서 항목 동적 생성 -->
+      </div>
+      <!-- 선택된 항목 슬라이더 -->
+      <div class="flex items-center gap-3 px-1">
+        <button id="btnResetSingleAdjust" type="button" class="text-[11px] text-slate-400 hover:text-white shrink-0 px-2 py-1 rounded-lg bg-surface-800">
+          초기화
+        </button>
+        <input id="adjustSlider" type="range" min="-100" max="100" value="0" class="flex-1" />
+        <span id="adjustVal" class="text-[11px] font-mono text-indigo-300 w-9 text-right">0</span>
+      </div>
+    </div>
+
+    <!-- (4) 자르기 & 회전 패널 -->
+    <div id="panel-crop" class="tool-content hidden space-y-2.5">
+      <!-- 비율 선택 & 회전 버튼 -->
+      <div class="flex items-center gap-1.5 overflow-x-auto no-scrollbar pb-0.5">
+        <button type="button" data-ratio="free" class="crop-ratio-btn shrink-0 px-3 py-1.5 rounded-xl bg-indigo-600 text-white text-xs font-medium">자유</button>
+        <button type="button" data-ratio="1" class="crop-ratio-btn shrink-0 px-3 py-1.5 rounded-xl bg-surface-800 text-slate-300 text-xs font-medium">1:1</button>
+        <button type="button" data-ratio="0.8" class="crop-ratio-btn shrink-0 px-3 py-1.5 rounded-xl bg-surface-800 text-slate-300 text-xs font-medium">4:5</button>
+        <button type="button" data-ratio="1.7777" class="crop-ratio-btn shrink-0 px-3 py-1.5 rounded-xl bg-surface-800 text-slate-300 text-xs font-medium">16:9</button>
+        <button type="button" data-ratio="0.5625" class="crop-ratio-btn shrink-0 px-3 py-1.5 rounded-xl bg-surface-800 text-slate-300 text-xs font-medium">9:16</button>
+        <div class="w-px h-5 bg-white/10 shrink-0 mx-0.5"></div>
+        <button id="btnRotateLeft" type="button" title="왼쪽 90도 회전" class="shrink-0 p-2 rounded-xl bg-surface-800 text-slate-200 active:scale-95">↺</button>
+        <button id="btnRotateRight" type="button" title="오른쪽 90도 회전" class="shrink-0 p-2 rounded-xl bg-surface-800 text-slate-200 active:scale-95">↻</button>
+        <button id="btnFlipH" type="button" title="좌우 반전" class="shrink-0 px-2.5 py-1.5 rounded-xl bg-surface-800 text-slate-200 text-xs active:scale-95">⇄</button>
+        <button id="btnFlipV" type="button" title="상하 반전" class="shrink-0 px-2.5 py-1.5 rounded-xl bg-surface-800 text-slate-200 text-xs active:scale-95">⇅</button>
+      </div>
+
+      <!-- 영역 크기 슬라이더 및 적용 버튼 -->
+      <div class="flex items-center gap-2.5 px-1">
+        <span class="text-[11px] text-slate-400 shrink-0">영역 크기</span>
+        <input id="cropScaleSlider" type="range" min="30" max="100" value="85" class="flex-1" />
+        <button id="btnApplyCrop" type="button"
+          class="shrink-0 px-3.5 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 active:scale-95 text-xs font-semibold text-white">
+          자르기 적용
+        </button>
+      </div>
+    </div>
+
+    <!-- (5) 텍스트 추가 패널 -->
+    <div id="panel-text" class="tool-content hidden space-y-2.5">
+      <div class="flex items-center gap-2">
+        <input id="textInput" type="text" placeholder="사진에 넣을 문구를 입력하세요 (드래그 이동)"
+          class="flex-1 min-w-0 px-3 py-2 rounded-xl bg-surface-950 border border-white/10 focus:border-indigo-500 focus:outline-none text-xs text-white placeholder-slate-500" />
+        <button id="btnInsertDate" type="button"
+          class="shrink-0 px-2.5 py-2 rounded-xl bg-surface-800 text-[11px] text-amber-300 font-medium active:scale-95">
+          📅 날짜
+        </button>
+        <button id="btnApplyText" type="button"
+          class="shrink-0 px-3.5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 active:scale-95 text-xs font-semibold text-white">
+          적용
+        </button>
+      </div>
+      <div class="flex items-center justify-between gap-3 px-1">
+        <!-- 색상 팔레트 -->
+        <div class="flex items-center gap-1.5" id="textColorPalette">
+          <button type="button" data-color="#FFFFFF" class="text-color-btn w-6 h-6 rounded-full bg-white ring-2 ring-indigo-400"></button>
+          <button type="button" data-color="#111827" class="text-color-btn w-6 h-6 rounded-full bg-slate-900 border border-white/30"></button>
+          <button type="button" data-color="#FBBF24" class="text-color-btn w-6 h-6 rounded-full bg-amber-400"></button>
+          <button type="button" data-color="#FB7185" class="text-color-btn w-6 h-6 rounded-full bg-rose-400"></button>
+          <button type="button" data-color="#38BDF8" class="text-color-btn w-6 h-6 rounded-full bg-sky-400"></button>
+        </div>
+        <!-- 크기 슬라이더 -->
+        <div class="flex items-center gap-2 flex-1 max-w-[160px]">
+          <span class="text-[11px] text-slate-400 shrink-0">크기</span>
+          <input id="textSizeSlider" type="range" min="16" max="64" value="28" class="flex-1" />
+        </div>
+        <!-- 배경 박스 토글 -->
+        <button id="btnToggleTextBg" type="button"
+          class="shrink-0 px-2.5 py-1 rounded-lg bg-surface-800 text-[11px] text-slate-300 border border-white/10">
+          배경 OFF
+        </button>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===================== 4. 하단 메인 네비게이션 바 ===================== -->
+  <nav class="shrink-0 h-16 pb-[env(safe-area-inset-bottom)] bg-surface-950 border-t border-white/10 grid grid-cols-5 z-30">
+    <button type="button" data-tab="ai" class="nav-tab-btn flex flex-col items-center justify-center gap-1 text-indigo-400 transition">
+      <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09z" />
+      </svg>
+      <span class="text-[10px] font-semibold">AI 매직</span>
+    </button>
+
+    <button type="button" data-tab="filter" class="nav-tab-btn flex flex-col items-center justify-center gap-1 text-slate-400 hover:text-slate-200 transition">
+      <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M7 21a4 4 0 01-4-4V5a2 2 0 012-2h4a2 2 0 012 2v12a4 4 0 01-4 4zm0 0h12a2 2 0 002-2v-4a2 2 0 00-2-2h-2.343M11 7.343l1.657-1.657a2 2 0 012.828 0l2.829 2.829a2 2 0 010 2.828l-8.486 8.485M7 17h.01" />
+      </svg>
+      <span class="text-[10px] font-medium">필터</span>
+    </button>
+
+    <button type="button" data-tab="adjust" class="nav-tab-btn flex flex-col items-center justify-center gap-1 text-slate-400 hover:text-slate-200 transition">
+      <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4" />
+      </svg>
+      <span class="text-[10px] font-medium">보정</span>
+    </button>
+
+    <button type="button" data-tab="crop" class="nav-tab-btn flex flex-col items-center justify-center gap-1 text-slate-400 hover:text-slate-200 transition">
+      <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M6 2v14a2 2 0 002 2h14M18 22V8a2 2 0 00-2-2H2" />
+      </svg>
+      <span class="text-[10px] font-medium">자르기</span>
+    </button>
+
+    <button type="button" data-tab="text" class="nav-tab-btn flex flex-col items-center justify-center gap-1 text-slate-400 hover:text-slate-200 transition">
+      <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M4 6h16M12 6v12m-4 0h8" />
+      </svg>
+      <span class="text-[10px] font-medium">텍스트</span>
+    </button>
+  </nav>
+
+  <!-- ===================== 5. 설정 / PWA 안내 모달 ===================== -->
+  <div id="settingsModal" class="hidden fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-end sm:items-center justify-center p-3">
+    <div class="w-full max-w-md rounded-3xl bg-surface-900 border border-white/10 p-5 shadow-2xl space-y-4 max-h-[85dvh] overflow-y-auto">
+      <div class="flex items-center justify-between">
+        <h2 class="text-base font-bold text-white">설정 및 안드로이드 앱 설치</h2>
+        <button id="btnCloseSettings" type="button" class="p-1.5 rounded-xl bg-surface-800 text-slate-300 hover:text-white">✕</button>
+      </div>
+
+      <!-- PWA 설치 안내 -->
+      <div class="p-3.5 rounded-2xl bg-indigo-500/10 border border-indigo-400/20 space-y-2">
+        <p class="text-xs font-semibold text-indigo-300">📱 안드로이드 폰에 앱처럼 설치하기 (PWA)</p>
+        <ol class="text-[11px] text-slate-300 space-y-1 list-decimal list-inside leading-relaxed">
+          <li>이 HTML 파일을 Vercel, Netlify 또는 GitHub Pages에 올립니다.</li>
+          <li>안드로이드 <b>크롬(Chrome)</b> 브라우저로 해당 주소에 접속합니다.</li>
+          <li>우측 상단 <b>점 3개(⋮) → 홈 화면에 추가 → 설치</b>를 누릅니다.</li>
+        </ol>
+        <button id="btnInstallPwa" type="button" class="hidden w-full mt-2 py-2 rounded-xl bg-indigo-600 text-xs font-semibold text-white">
+          지금 바로 홈 화면에 설치하기
+        </button>
+      </div>
+
+      <!-- 개인 배포용 무료 Gemini API 키 입력 (미리보기에서는 비워둬도 자동 작동) -->
+      <div class="space-y-1.5">
+        <label for="customApiKeyInput" class="block text-xs font-semibold text-slate-200">
+          개인용 Gemini API 키 (외부 배포 시 선택 입력)
+        </label>
+        <input id="customApiKeyInput" type="password" placeholder="미리보기에서는 비워두세요 (개인 서버 배포 시 입력)"
+          class="w-full px-3 py-2.5 rounded-xl bg-surface-950 border border-white/10 text-xs text-white placeholder-slate-500 focus:border-indigo-500 focus:outline-none" />
+        <p class="text-[11px] text-slate-400 leading-relaxed">
+          Google AI Studio에서 발급받은 무료 키를 입력하면 내 스마트폰 기기 로컬에만 안전하게 저장됩니다.
+        </p>
+      </div>
+
+      <!-- 저장 포맷 설정 -->
+      <div class="space-y-1.5">
+        <label class="block text-xs font-semibold text-slate-200">저장 이미지 형식</label>
+        <div class="grid grid-cols-2 gap-2">
+          <button type="button" data-format="image/jpeg" class="format-btn py-2 rounded-xl bg-indigo-600 text-white text-xs font-medium">JPG (고화질 · 추천)</button>
+          <button type="button" data-format="image/png" class="format-btn py-2 rounded-xl bg-surface-800 text-slate-300 text-xs font-medium">PNG (무손실)</button>
+        </div>
+      </div>
+
+      <!-- 전체 초기화 -->
+      <div class="pt-2 border-t border-white/10 flex gap-2">
+        <button id="btnResetAllEdits" type="button"
+          class="flex-1 py-2.5 rounded-xl bg-rose-500/15 hover:bg-rose-500/25 text-rose-300 text-xs font-semibold transition">
+          현재 사진 원본 복원
+        </button>
+        <button id="btnSaveSettings" type="button"
+          class="flex-1 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold transition">
+          설정 저장
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===================== 6. 내보내기 완료 / 공유 모달 ===================== -->
+  <div id="exportModal" class="hidden fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="w-full max-w-xs rounded-3xl bg-surface-900 border border-white/10 p-5 text-center space-y-4 shadow-2xl">
+      <div class="w-12 h-12 mx-auto rounded-2xl bg-emerald-500/20 text-emerald-400 flex items-center justify-center text-2xl">✓</div>
+      <div>
+        <h3 class="text-sm font-bold text-white mb-1">사진을 저장할 준비가 되었어요!</h3>
+        <p class="text-[11px] text-slate-400">기기 갤러리로 다운로드하거나 바로 공유할 수 있습니다.</p>
+      </div>
+      <div class="space-y-2">
+        <button id="btnDownloadFinal" type="button"
+          class="w-full py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-xs font-semibold text-white">
+          📥 갤러리(기기)에 다운로드
+        </button>
+        <button id="btnShareFinal" type="button"
+          class="hidden w-full py-2.5 rounded-xl bg-surface-800 hover:bg-surface-700 text-xs font-semibold text-slate-200">
+          📤 다른 앱으로 바로 공유
+        </button>
+        <button id="btnCloseExport" type="button"
+          class="w-full py-2 rounded-xl text-xs text-slate-400 hover:text-white">
+          닫기
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    /**
+     * =========================================================================
+     * AI 포토 스튜디오 (모바일 PWA 단일 파일 애플리케이션)
+     * - 로컬 실시간 캔버스 편집 (필터, 세부 보정, 자르기/회전, 텍스트)
+     * - Gemini API 연동:
+     *   1) gemini-3-flash-preview : 사진 분석 기반 AI 자동 보정 (JSON 스키마)
+     *   2) gemini-3.1-flash-image : 자연어/프리셋 기반 AI 매직 이미지 편집
+     * =========================================================================
+     */
+
+    // 런타임 기본 API 키 (미리보기 환경에서 자동 주입되므로 빈 문자열 유지)
+    const apiKey = "";
+
+    // 동적 PWA Manifest 등록 (단일 파일에서도 안드로이드 앱 설치 메타데이터 제공)
+    (function setupDynamicManifest() {
+      try {
+        const iconSvg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+          <defs>
+            <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
+              <stop offset="0%" stop-color="#6366F1"/>
+              <stop offset="100%" stop-color="#8B5CF6"/>
+            </linearGradient>
+          </defs>
+          <rect width="512" height="512" rx="120" fill="url(#g)"/>
+          <path fill="#FFFFFF" d="M256 120l26 88 88 26-88 26-26 88-26-88-88-26 88-26z"/>
+          <circle cx="364" cy="148" r="24" fill="#FDE047"/>
+        </svg>`;
+        const iconBlob = new Blob([iconSvg], { type: 'image/svg+xml' });
+        const iconUrl = URL.createObjectURL(iconBlob);
+
+        const manifest = {
+          name: "AI 포토 스튜디오",
+          short_name: "AI 포토",
+          description: "안드로이드용 개인 무료 AI 사진 편집기",
+          start_url: ".",
+          display: "standalone",
+          orientation: "portrait",
+          background_color: "#0B0D12",
+          theme_color: "#0B0D12",
+          icons: [{ src: iconUrl, sizes: "512x512", type: "image/svg+xml", purpose: "any maskable" }]
+        };
+        const manifestBlob = new Blob([JSON.stringify(manifest)], { type: 'application/json' });
+        const manifestUrl = URL.createObjectURL(manifestBlob);
+        const link = document.createElement('link');
+        link.rel = 'manifest';
+        link.href = manifestUrl;
+        document.head.appendChild(link);
+      } catch (e) {
+        // Manifest 동적 생성이 제한된 환경에서도 앱은 정상 동작
+      }
+    })();
+
+    // ===================== 앱 전역 상태 =====================
+    const DEFAULT_ADJUSTMENTS = {
+      brightness: 0,  // -100 ~ 100
+      contrast: 0,    // -100 ~ 100
+      saturation: 0,  // -100 ~ 100
+      warmth: 0,      // -100 ~ 100
+      fade: 0,        // 0 ~ 100
+      vignette: 0,    // 0 ~ 100
+      blur: 0         // 0 ~ 100
+    };
+
+    const FILTERS = [
+      { id: 'none', name: '원본', swatch: 'from-slate-600 to-slate-800', css: () => '' },
+      { id: 'warmfilm', name: '웜필름', swatch: 'from-amber-500 to-orange-700', css: (k) => `sepia(${0.28 * k}) contrast(${1 + 0.08 * k}) saturate(${1 + 0.18 * k}) brightness(${1 + 0.04 * k})` },
+      { id: 'kodak', name: '코닥', swatch: 'from-yellow-500 to-rose-600', css: (k) => `contrast(${1 + 0.16 * k}) saturate(${1 + 0.25 * k}) sepia(${0.15 * k}) hue-rotate(${-6 * k}deg)` },
+      { id: 'cinema', name: '시네마', swatch: 'from-teal-600 to-slate-900', css: (k) => `contrast(${1 + 0.22 * k}) saturate(${1 - 0.15 * k}) hue-rotate(${10 * k}deg) brightness(${1 - 0.05 * k})` },
+      { id: 'fresh', name: '청량', swatch: 'from-sky-400 to-cyan-600', css: (k) => `brightness(${1 + 0.08 * k}) contrast(${1 + 0.06 * k}) saturate(${1 + 0.2 * k}) hue-rotate(${6 * k}deg)` },
+      { id: 'pastel', name: '파스텔', swatch: 'from-pink-300 to-indigo-400', css: (k) => `brightness(${1 + 0.12 * k}) contrast(${1 - 0.12 * k}) saturate(${1 - 0.1 * k})` },
+      { id: 'vintage', name: '빈티지', swatch: 'from-stone-500 to-amber-900', css: (k) => `sepia(${0.48 * k}) contrast(${1 - 0.05 * k}) brightness(${1 - 0.04 * k})` },
+      { id: 'mono', name: '흑백', swatch: 'from-slate-300 to-slate-700', css: (k) => `grayscale(${1 * k}) contrast(${1 + 0.12 * k})` },
+      { id: 'noir', name: '느와르', swatch: 'from-zinc-700 to-black', css: (k) => `grayscale(${1 * k}) contrast(${1 + 0.45 * k}) brightness(${1 - 0.08 * k})` },
+      { id: 'vivid', name: '비비드', swatch: 'from-fuchsia-500 to-amber-500', css: (k) => `saturate(${1 + 0.55 * k}) contrast(${1 + 0.14 * k})` }
+    ];
+
+    const ADJUST_ITEMS = [
+      { key: 'brightness', label: '밝기', min: -100, max: 100 },
+      { key: 'contrast', label: '대비', min: -100, max: 100 },
+      { key: 'saturation', label: '채도', min: -100, max: 100 },
+      { key: 'warmth', label: '색온도', min: -100, max: 100 },
+      { key: 'fade', label: '페이드', min: 0, max: 100 },
+      { key: 'vignette', label: '비네팅', min: 0, max: 100 },
+      { key: 'blur', label: '흐림', min: 0, max: 100 }
+    ];
+
+    const state = {
+      originalImage: null,      // 최초 불러온 원본 이미지
+      baseImage: null,          // 현재 래스터 베이스 (자르기/회전/AI/텍스트 반영)
+      adjustments: { ...DEFAULT_ADJUSTMENTS },
+      filterId: 'none',
+      filterIntensity: 100,
+      activeTab: 'ai',
+      activeAdjustKey: 'brightness',
+      isComparing: false,
+      history: [],              // Undo/Redo 스냅샷 배열
+      historyIndex: -1,
+      exportFormat: 'image/jpeg',
+      customApiKey: localStorage.getItem('ai_photo_custom_key') || '',
+      deferredPrompt: null,     // PWA 설치 프롬프트 이벤트
+      lastExportBlob: null,
+
+      // 자르기 상태 (정규화 비율 0~1)
+      crop: { ratio: 'free', x: 0.075, y: 0.075, w: 0.85, h: 0.85 },
+
+      // 텍스트 오버레이 상태
+      text: { content: '', color: '#FFFFFF', size: 28, bg: false, xPct: 50, yPct: 50 }
+    };
+
+    // ===================== DOM 참조 =====================
+    const el = {
+      fileInput: document.getElementById('fileInput'),
+      btnOpenPhoto: document.getElementById('btnOpenPhoto'),
+      btnEmptyUpload: document.getElementById('btnEmptyUpload'),
+      btnLoadSample: document.getElementById('btnLoadSample'),
+      btnUndo: document.getElementById('btnUndo'),
+      btnRedo: document.getElementById('btnRedo'),
+      btnCompare: document.getElementById('btnCompare'),
+      btnSettings: document.getElementById('btnSettings'),
+      btnExport: document.getElementById('btnExport'),
+
+      canvasContainer: document.getElementById('canvasContainer'),
+      emptyState: document.getElementById('emptyState'),
+      canvasWrapper: document.getElementById('canvasWrapper'),
+      editorCanvas: document.getElementById('editorCanvas'),
+      originalBadge: document.getElementById('originalBadge'),
+      aiLoadingOverlay: document.getElementById('aiLoadingOverlay'),
+      aiLoadingTitle: document.getElementById('aiLoadingTitle'),
+      aiLoadingDesc: document.getElementById('aiLoadingDesc'),
+      toastContainer: document.getElementById('toastContainer'),
+
+      // AI 패널
+      btnAiAutoEnhance: document.getElementById('btnAiAutoEnhance'),
+      aiPromptInput: document.getElementById('aiPromptInput'),
+      btnAiPromptRun: document.getElementById('btnAiPromptRun'),
+
+      // 필터 패널
+      filterList: document.getElementById('filterList'),
+      filterIntensitySlider: document.getElementById('filterIntensitySlider'),
+      filterIntensityVal: document.getElementById('filterIntensityVal'),
+
+      // 보정 패널
+      adjustList: document.getElementById('adjustList'),
+      adjustSlider: document.getElementById('adjustSlider'),
+      adjustVal: document.getElementById('adjustVal'),
+      btnResetSingleAdjust: document.getElementById('btnResetSingleAdjust'),
+
+      // 자르기 패널
+      cropOverlay: document.getElementById('cropOverlay'),
+      cropBox: document.getElementById('cropBox'),
+      cropScaleSlider: document.getElementById('cropScaleSlider'),
+      btnApplyCrop: document.getElementById('btnApplyCrop'),
+      btnRotateLeft: document.getElementById('btnRotateLeft'),
+      btnRotateRight: document.getElementById('btnRotateRight'),
+      btnFlipH: document.getElementById('btnFlipH'),
+      btnFlipV: document.getElementById('btnFlipV'),
+
+      // 텍스트 패널
+      textOverlay: document.getElementById('textOverlay'),
+      draggableText: document.getElementById('draggableText'),
+      textInput: document.getElementById('textInput'),
+      btnInsertDate: document.getElementById('btnInsertDate'),
+      btnApplyText: document.getElementById('btnApplyText'),
+      textSizeSlider: document.getElementById('textSizeSlider'),
+      btnToggleTextBg: document.getElementById('btnToggleTextBg'),
+
+      // 설정 모달
+      settingsModal: document.getElementById('settingsModal'),
+      btnCloseSettings: document.getElementById('btnCloseSettings'),
+      btnInstallPwa: document.getElementById('btnInstallPwa'),
+      customApiKeyInput: document.getElementById('customApiKeyInput'),
+      btnResetAllEdits: document.getElementById('btnResetAllEdits'),
+      btnSaveSettings: document.getElementById('btnSaveSettings'),
+
+      // 내보내기 모달
+      exportModal: document.getElementById('exportModal'),
+      btnDownloadFinal: document.getElementById('btnDownloadFinal'),
+      btnShareFinal: document.getElementById('btnShareFinal'),
+      btnCloseExport: document.getElementById('btnCloseExport')
+    };
+
+    const ctx = el.editorCanvas.getContext('2d');
+
+    // ===================== 유틸리티 함수 =====================
+
+    /** 화면 상단 토스트 알림 표시 (alert 미사용) */
+    function showToast(message, type = 'info') {
+      const colors = {
+        info: 'bg-surface-800/95 border-white/15 text-slate-100',
+        success: 'bg-emerald-950/95 border-emerald-500/40 text-emerald-200',
+        error: 'bg-rose-950/95 border-rose-500/40 text-rose-200'
+      };
+      const toast = document.createElement('div');
+      toast.className = `px-4 py-2.5 rounded-2xl border backdrop-blur-md text-xs font-medium shadow-xl transition-all duration-300 opacity-0 translate-y-[-8px] ${colors[type] || colors.info}`;
+      toast.textContent = message;
+      el.toastContainer.appendChild(toast);
+
+      requestAnimationFrame(() => {
+        toast.classList.remove('opacity-0', 'translate-y-[-8px]');
+      });
+
+      setTimeout(() => {
+        toast.classList.add('opacity-0', 'translate-y-[-8px]');
+        setTimeout(() => toast.remove(), 300);
+      }, 3200);
+    }
+
+    /** AI 로딩 오버레이 토글 */
+    function setAiLoading(visible, title = 'AI가 사진을 편집하고 있어요', desc = '잠시만 기다려 주세요...') {
+      el.aiLoadingTitle.textContent = title;
+      el.aiLoadingDesc.textContent = desc;
+      el.aiLoadingOverlay.classList.toggle('hidden', !visible);
+    }
+
+    /** 현재 사용할 Gemini API 키 반환 (사용자 입력 키 우선, 없으면 런타임 기본 빈 문자열) */
+    function getEffectiveApiKey() {
+      return (state.customApiKey || "").trim() || apiKey;
+    }
+
+    /** 지수 백오프(Exponential Backoff)가 적용된 fetch 래퍼 */
+    async function fetchWithBackoff(url, options, maxRetries = 4) {
+      let delay = 1000;
+      for (let attempt = 0; attempt <= maxRetries; attempt++) {
+        try {
+          const response = await fetch(url, options);
+          if (response.ok) return response;
+          // 429 또는 5xx 일시 오류 시 재시도
+          if ((response.status === 429 || response.status >= 500) && attempt < maxRetries) {
+            await new Promise(res => setTimeout(res, delay));
+            delay *= 2;
+            continue;
+          }
+          const errText = await response.text().catch(() => '');
+          throw new Error(`API 오류 (${response.status}): ${errText.slice(0, 140)}`);
+        } catch (err) {
+          if (attempt < maxRetries && err.name === 'TypeError') {
+            await new Promise(res => setTimeout(res, delay));
+            delay *= 2;
+            continue;
+          }
+          throw err;
+        }
+      }
+    }
+
+    /** DataURL을 HTMLImageElement로 로드 */
+    function loadImageFromSrc(src) {
+      return new Promise((resolve, reject) => {
+        const img = new Image();
+        img.onload = () => resolve(img);
+        img.onerror = () => reject(new Error('이미지를 불러올 수 없습니다.'));
+        img.src = src;
+      });
+    }
+
+    /** 이미지가 로드되어 있는지 확인 */
+    function requirePhoto() {
+      if (!state.baseImage) {
+        showToast('먼저 사진을 선택하거나 샘플 사진을 열어주세요.', 'info');
+        return false;
+      }
+      return true;
+    }
+
+    // ===================== 샘플 사진 프로시저럴 생성 =====================
+    /** 외부 URL 없이 캔버스로 선명한 노을 산맥 풍경 샘플 사진 생성 */
+    function generateSamplePhoto() {
+      const off = document.createElement('canvas');
+      off.width = 1080;
+      off.height = 1350;
+      const c = off.getContext('2d');
+
+      // 노을 하늘 그라데이션
+      const sky = c.createLinearGradient(0, 0, 0, 920);
+      sky.addColorStop(0, '#1e2952');
+      sky.addColorStop(0.4, '#5e4b7a');
+      sky.addColorStop(0.75, '#d97757');
+      sky.addColorStop(1, '#f6c270');
+      c.fillStyle = sky;
+      c.fillRect(0, 0, off.width, off.height);
+
+      // 태양 및 빛무리
+      const sunGlow = c.createRadialGradient(540, 690, 20, 540, 690, 320);
+      sunGlow.addColorStop(0, 'rgba(255, 248, 215, 0.95)');
+      sunGlow.addColorStop(0.25, 'rgba(253, 198, 118, 0.55)');
+      sunGlow.addColorStop(1, 'rgba(253, 198, 118, 0)');
+      c.fillStyle = sunGlow;
+      c.fillRect(0, 0, off.width, off.height);
+
+      c.beginPath();
+      c.arc(540, 690, 68, 0, Math.PI * 2);
+      c.fillStyle = '#FFF5D6';
+      c.fill();
+
+      // 구름 레이어
+      c.fillStyle = 'rgba(255, 224, 195, 0.22)';
+      [[240, 360, 180, 28], [780, 440, 210, 32], [450, 260, 150, 22]].forEach(([x, y, rx, ry]) => {
+        c.beginPath();
+        c.ellipse(x, y, rx, ry, 0, 0, Math.PI * 2);
+        c.fill();
+      });
+
+      // 원경 산맥
+      c.fillStyle = '#473d66';
+      c.beginPath();
+      c.moveTo(0, 820);
+      c.lineTo(190, 670);
+      c.lineTo(390, 770);
+      c.lineTo(620, 635);
+      c.lineTo(860, 750);
+      c.lineTo(1080, 655);
+      c.lineTo(1080, 1350);
+      c.lineTo(0, 1350);
+      c.closePath();
+      c.fill();
+
+      // 중경 산맥
+      c.fillStyle = '#2b2847';
+      c.beginPath();
+      c.moveTo(0, 890);
+      c.lineTo(260, 760);
+      c.lineTo(520, 875);
+      c.lineTo(790, 745);
+      c.lineTo(1080, 860);
+      c.lineTo(1080, 1350);
+      c.lineTo(0, 1350);
+      c.closePath();
+      c.fill();
+
+      // 호수 수면 반사
+      const lake = c.createLinearGradient(0, 910, 0, 1350);
+      lake.addColorStop(0, '#c2795e');
+      lake.addColorStop(0.45, '#3b375c');
+      lake.addColorStop(1, '#121526');
+      c.fillStyle = lake;
+      c.fillRect(0, 910, off.width, 440);
+
+      // 수면 위 태양 반사 물결
+      for (let i = 0; i < 24; i++) {
+        const y = 930 + i * 16;
+        const w = Math.max(20, 150 - i * 4.5);
+        c.fillStyle = `rgba(255, 228, 175, ${0.42 - i * 0.015})`;
+        c.fillRect(540 - w / 2 + Math.sin(i * 1.4) * 14, y, w, 4);
+      }
+
+      // 근경 실루엣 언덕 및 소나무
+      c.fillStyle = '#0e111f';
+      c.beginPath();
+      c.moveTo(0, 1140);
+      c.quadraticCurveTo(260, 1060, 480, 1185);
+      c.quadraticCurveTo(790, 1260, 1080, 1120);
+      c.lineTo(1080, 1350);
+      c.lineTo(0, 1350);
+      c.closePath();
+      c.fill();
+
+      const drawPine = (x, baseY, h) => {
+        c.beginPath();
+        c.moveTo(x, baseY - h);
+        c.lineTo(x - h * 0.28, baseY);
+        c.lineTo(x + h * 0.28, baseY);
+        c.closePath();
+        c.fill();
+      };
+      drawPine(120, 1150, 180);
+      drawPine(210, 1135, 135);
+      drawPine(950, 1170, 210);
+      drawPine(860, 1190, 145);
+
+      return off.toDataURL('image/jpeg', 0.94);
+    }
+
+    // ===================== 히스토리 (Undo / Redo) =====================
+    function pushHistory() {
+      if (!state.baseImage) return;
+      const snapshot = {
+        baseSrc: state.baseImage.src,
+        adjustments: { ...state.adjustments },
+        filterId: state.filterId,
+        filterIntensity: state.filterIntensity
+      };
+      // 현재 포인터 이후 기록 제거
+      state.history = state.history.slice(0, state.historyIndex + 1);
+      state.history.push(snapshot);
+      // 모바일 메모리 보호를 위해 최대 15단계 유지
+      if (state.history.length > 15) {
+        state.history.shift();
+      }
+      state.historyIndex = state.history.length - 1;
+      updateToolbarButtons();
+    }
+
+    async function restoreHistoryAt(index) {
+      if (index < 0 || index >= state.history.length) return;
+      const snap = state.history[index];
+      state.historyIndex = index;
+      state.adjustments = { ...snap.adjustments };
+      state.filterId = snap.filterId;
+      state.filterIntensity = snap.filterIntensity;
+      if (!state.baseImage || state.baseImage.src !== snap.baseSrc) {
+        state.baseImage = await loadImageFromSrc(snap.baseSrc);
+      }
+      syncUiWithState();
+      renderCanvas();
+      updateToolbarButtons();
+    }
+
+    function updateToolbarButtons() {
+      const hasImg = !!state.baseImage;
+      el.btnExport.disabled = !hasImg;
+      el.btnCompare.disabled = !hasImg;
+      el.btnUndo.disabled = state.historyIndex <= 0;
+      el.btnRedo.disabled = state.historyIndex >= state.history.length - 1;
+    }
+
+    // ===================== 핵심 캔버스 렌더링 엔진 =====================
+
+    /** 현재 상태 기반 CSS 필터 문자열 조합 */
+    function buildFilterString() {
+      const a = state.adjustments;
+      const parts = [];
+
+      // 기본 슬라이더 보정
+      const b = 1 + a.brightness / 100;
+      const c = 1 + a.contrast / 100;
+      const s = 1 + a.saturation / 100;
+      if (a.brightness !== 0) parts.push(`brightness(${Math.max(0.1, b).toFixed(3)})`);
+      if (a.contrast !== 0) parts.push(`contrast(${Math.max(0.1, c).toFixed(3)})`);
+      if (a.saturation !== 0) parts.push(`saturate(${Math.max(0, s).toFixed(3)})`);
+      if (a.blur > 0) parts.push(`blur(${(a.blur * 0.08).toFixed(2)}px)`);
+
+      // 프리셋 필터 결합
+      const preset = FILTERS.find(f => f.id === state.filterId);
+      if (preset && preset.id !== 'none' && state.filterIntensity > 0) {
+        const k = state.filterIntensity / 100;
+        parts.push(preset.css(k));
+      }
+
+      return parts.length ? parts.join(' ') : 'none';
+    }
+
+    /** 지정된 컨텍스트에 현재 이미지 + 모든 효과 렌더링 */
+    function drawEditedImage(targetCtx, width, height, showOriginalOnly = false) {
+      const srcImg = showOriginalOnly ? state.originalImage : state.baseImage;
+      if (!srcImg) return;
+
+      targetCtx.save();
+      targetCtx.clearRect(0, 0, width, height);
+
+      if (showOriginalOnly) {
+        targetCtx.filter = 'none';
+        targetCtx.drawImage(srcImg, 0, 0, width, height);
+        targetCtx.restore();
+        return;
+      }
+
+      // 1. 기본 이미지 + CSS 필터(밝기/대비/채도/흐림/프리셋)
+      targetCtx.filter = buildFilterString();
+      targetCtx.drawImage(srcImg, 0, 0, width, height);
+      targetCtx.filter = 'none';
+
+      // 2. 색온도(Warmth) 오버레이
+      const wVal = state.adjustments.warmth;
+      if (wVal !== 0) {
+        targetCtx.save();
+        targetCtx.globalCompositeOperation = 'soft-light';
+        const alpha = Math.min(0.45, Math.abs(wVal) / 100 * 0.45);
+        targetCtx.fillStyle = wVal > 0
+          ? `rgba(255, 165, 60, ${alpha})`
+          : `rgba(70, 155, 255, ${alpha})`;
+        targetCtx.fillRect(0, 0, width, height);
+        targetCtx.restore();
+      }
+
+      // 3. 페이드(Fade) 필름 매트 효과
+      const fVal = state.adjustments.fade;
+      if (fVal > 0) {
+        targetCtx.save();
+        targetCtx.globalCompositeOperation = 'lighten';
+        const alpha = (fVal / 100) * 0.32;
+        targetCtx.fillStyle = `rgba(38, 42, 54, ${alpha})`;
+        targetCtx.fillRect(0, 0, width, height);
+        targetCtx.restore();
+      }
+
+      // 4. 비네팅(Vignette) 방사형 그라데이션
+      const vVal = state.adjustments.vignette;
+      if (vVal > 0) {
+        targetCtx.save();
+        const cx = width / 2;
+        const cy = height / 2;
+        const maxR = Math.hypot(cx, cy);
+        const grad = targetCtx.createRadialGradient(cx, cy, maxR * 0.35, cx, cy, maxR);
+        grad.addColorStop(0, 'rgba(0,0,0,0)');
+        grad.addColorStop(1, `rgba(0,0,0,${(vVal / 100) * 0.82})`);
+        targetCtx.fillStyle = grad;
+        targetCtx.fillRect(0, 0, width, height);
+        targetCtx.restore();
+      }
+
+      targetCtx.restore();
+    }
+
+    /** 뷰포트 크기에 맞춰 반응형 캔버스 리사이즈 및 다시 그리기 */
+    function renderCanvas() {
+      if (!state.baseImage) return;
+
+      const containerRect = el.canvasContainer.getBoundingClientRect();
+      const maxW = Math.max(120, containerRect.width - 24);
+      const maxH = Math.max(120, containerRect.height - 24);
+
+      const img = state.isComparing ? state.originalImage : state.baseImage;
+      const imgRatio = img.naturalWidth / img.naturalHeight;
+
+      let displayW = maxW;
+      let displayH = displayW / imgRatio;
+      if (displayH > maxH) {
+        displayH = maxH;
+        displayW = displayH * imgRatio;
+      }
+
+      const dpr = Math.min(window.devicePixelRatio || 1, 2);
+      el.editorCanvas.style.width = `${Math.floor(displayW)}px`;
+      el.editorCanvas.style.height = `${Math.floor(displayH)}px`;
+      el.editorCanvas.width = Math.floor(displayW * dpr);
+      el.editorCanvas.height = Math.floor(displayH * dpr);
+
+      drawEditedImage(ctx, el.editorCanvas.width, el.editorCanvas.height, state.isComparing);
+
+      // 자르기 박스 위치 갱신
+      if (state.activeTab === 'crop') {
+        updateCropBoxDOM();
+      }
+    }
+
+    /** 현재 편집 결과를 지정 최대 해상도의 JPEG DataURL/Base64로 렌더링 */
+    function renderCurrentToDataUrl(maxSide = 1280, mimeType = 'image/jpeg', quality = 0.92) {
+      const img = state.baseImage;
+      let w = img.naturalWidth;
+      let h = img.naturalHeight;
+      if (Math.max(w, h) > maxSide) {
+        const scale = maxSide / Math.max(w, h);
+        w = Math.round(w * scale);
+        h = Math.round(h * scale);
+      }
+      const off = document.createElement('canvas');
+      off.width = w;
+      off.height = h;
+      const offCtx = off.getContext('2d');
+      drawEditedImage(offCtx, w, h, false);
+      return off.toDataURL(mimeType, quality);
+    }
+
+    // ===================== 사진 불러오기 =====================
+    async function loadNewPhoto(src) {
+      try {
+        const img = await loadImageFromSrc(src);
+        // 초대형 스마트폰 원본 사진은 메모리 안정화를 위해 최대 2200px로 최적화
+        let targetSrc = src;
+        if (Math.max(img.naturalWidth, img.naturalHeight) > 2200) {
+          const scale = 2200 / Math.max(img.naturalWidth, img.naturalHeight);
+          const off = document.createElement('canvas');
+          off.width = Math.round(img.naturalWidth * scale);
+          off.height = Math.round(img.naturalHeight * scale);
+          off.getContext('2d').drawImage(img, 0, 0, off.width, off.height);
+          targetSrc = off.toDataURL('image/jpeg', 0.94);
+        }
+
+        const optimizedImg = await loadImageFromSrc(targetSrc);
+        state.originalImage = optimizedImg;
+        state.baseImage = optimizedImg;
+        state.adjustments = { ...DEFAULT_ADJUSTMENTS };
+        state.filterId = 'none';
+        state.filterIntensity = 100;
+        state.history = [];
+        state.historyIndex = -1;
+
+        el.emptyState.classList.add('hidden');
+        el.canvasWrapper.classList.remove('hidden');
+
+        syncUiWithState();
+        pushHistory();
+        renderCanvas();
+        showToast('사진을 불러왔어요! 편집을 시작해 보세요.', 'success');
+      } catch (err) {
+        showToast('사진을 열지 못했습니다. 다른 이미지를 선택해 주세요.', 'error');
+      }
+    }
+
+    // ===================== Gemini AI 기능 =====================
+
+    /** 1) AI 자동 색감 보정 (gemini-3-flash-preview, JSON 스키마 출력) */
+    async function runAiAutoEnhance() {
+      if (!requirePhoto()) return;
+      setAiLoading(true, 'AI가 사진의 빛과 색감을 분석 중이에요', '최적의 보정 수치를 계산하고 있습니다...');
+
+      try {
+        const dataUrl = renderCurrentToDataUrl(768, 'image/jpeg', 0.85);
+        const base64Data = dataUrl.split(',')[1];
+        const key = getEffectiveApiKey();
+        const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key=${key}`;
+
+        const prompt = `당신은 전문 사진 보정 전문가입니다. 이 사진을 분석하여 자연스럽고 화사하며 균형 잡힌 색감이 되도록 편집 슬라이더 수치를 추천해 주세요.
+- brightness: -40 ~ 40
+- contrast: -30 ~ 40
+- saturation: -30 ~ 40
+- warmth: -35 ~ 35
+- fade: 0 ~ 25
+- vignette: 0 ~ 35
+- reason: 어떤 부분을 보정했는지 친절한 한국어 한 문장 설명`;
+
+        const payload = {
+          contents: [{
+            role: "user",
+            parts: [
+              { text: prompt },
+              { inlineData: { mimeType: "image/jpeg", data: base64Data } }
+            ]
+          }],
+          generationConfig: {
+            responseMimeType: "application/json",
+            responseSchema: {
+              type: "OBJECT",
+              properties: {
+                brightness: { type: "INTEGER" },
+                contrast: { type: "INTEGER" },
+                saturation: { type: "INTEGER" },
+                warmth: { type: "INTEGER" },
+                fade: { type: "INTEGER" },
+                vignette: { type: "INTEGER" },
+                reason: { type: "STRING" }
+              },
+              required: ["brightness", "contrast", "saturation", "warmth", "fade", "vignette", "reason"]
+            }
+          }
+        };
+
+        const response = await fetchWithBackoff(url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+
+        const result = await response.json();
+        const text = result?.candidates?.[0]?.content?.parts?.[0]?.text;
+        if (!text) throw new Error('AI 분석 응답이 비어 있습니다.');
+
+        const parsed = JSON.parse(text);
+        const clamp = (v, min, max) => Math.max(min, Math.min(max, Math.round(Number(v) || 0)));
+
+        state.adjustments.brightness = clamp(parsed.brightness, -50, 50);
+        state.adjustments.contrast = clamp(parsed.contrast, -40, 50);
+        state.adjustments.saturation = clamp(parsed.saturation, -40, 50);
+        state.adjustments.warmth = clamp(parsed.warmth, -45, 45);
+        state.adjustments.fade = clamp(parsed.fade, 0, 35);
+        state.adjustments.vignette = clamp(parsed.vignette, 0, 45);
+
+        syncUiWithState();
+        renderCanvas();
+        pushHistory();
+        showToast(`🪄 ${parsed.reason || 'AI 자동 보정이 완료되었습니다!'}`, 'success');
+      } catch (err) {
+        showToast('AI 자동 보정에 실패했어요. 네트워크나 설정의 API 키를 확인해 주세요.', 'error');
+      } finally {
+        setAiLoading(false);
+      }
+    }
+
+    /** 2) AI 매직 이미지 편집 (gemini-3.1-flash-image, Image-to-Image) */
+    async function runAiMagicEdit(userPrompt) {
+      if (!requirePhoto()) return;
+      const cleanPrompt = (userPrompt || '').trim();
+      if (!cleanPrompt) {
+        showToast('원하는 편집 내용을 입력해 주세요.', 'info');
+        return;
+      }
+
+      setAiLoading(true, 'AI 매직 편집을 진행 중이에요', '사진을 새롭게 생성하고 있습니다 (약 5~15초 소요)');
+
+      try {
+        // 현재 편집 상태가 반영된 이미지를 적정 크기로 인코딩하여 전송
+        const dataUrl = renderCurrentToDataUrl(1024, 'image/jpeg', 0.9);
+        const base64Data = dataUrl.split(',')[1];
+        const key = getEffectiveApiKey();
+        const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-image:generateContent?key=${key}`;
+
+        const payload = {
+          contents: [{
+            role: "user",
+            parts: [
+              { text: `Edit this photo according to the following instruction while keeping natural high-quality photographic details: ${cleanPrompt}` },
+              {
+                inlineData: {
+                  mimeType: "image/jpeg",
+                  data: base64Data
+                }
+              }
+            ]
+          }],
+          generationConfig: {
+            responseModalities: ['TEXT', 'IMAGE']
+          }
+        };
+
+        const response = await fetchWithBackoff(url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+
+        const result = await response.json();
+        const parts = result?.candidates?.[0]?.content?.parts || [];
+        const imgPart = parts.find(p => p.inlineData && p.inlineData.data);
+
+        if (!imgPart) {
+          throw new Error('AI가 편집된 이미지를 반환하지 않았습니다.');
+        }
+
+        const outMime = imgPart.inlineData.mimeType || 'image/png';
+        const outUrl = `data:${outMime};base64,${imgPart.inlineData.data}`;
+        const newImg = await loadImageFromSrc(outUrl);
+
+        // AI 결과에 기존 슬라이더가 이미 반영되어 전송되었으므로 슬라이더는 초기화
+        state.baseImage = newImg;
+        state.adjustments = { ...DEFAULT_ADJUSTMENTS };
+        state.filterId = 'none';
+        state.filterIntensity = 100;
+
+        syncUiWithState();
+        renderCanvas();
+        pushHistory();
+        el.aiPromptInput.value = '';
+        showToast('✨ AI 매직 편집이 적용되었습니다!', 'success');
+      } catch (err) {
+        showToast('AI 편집에 실패했어요. 프롬프트를 조금 바꾸거나 API 키를 확인해 주세요.', 'error');
+      } finally {
+        setAiLoading(false);
+      }
+    }
+
+    // ===================== 자르기 & 변형 기능 =====================
+    function initCropBox(ratio = 'free') {
+      state.crop.ratio = ratio;
+      const scale = Number(el.cropScaleSlider.value) / 100;
+
+      if (!state.baseImage) return;
+      const imgAspect = state.baseImage.naturalWidth / state.baseImage.naturalHeight;
+
+      let w = scale;
+      let h = scale;
+
+      if (ratio !== 'free') {
+        const targetAspect = Number(ratio);
+        // 정규화 좌표에서 (w * imgW) / (h * imgH) = targetAspect => w/h = targetAspect / imgAspect
+        const normAspect = targetAspect / imgAspect;
+        if (normAspect >= 1) {
+          w = scale;
+          h = scale / normAspect;
+          if (h > 1) { h = 1; w = h * normAspect; }
+        } else {
+          h = scale;
+          w = scale * normAspect;
+          if (w > 1) { w = 1; h = w / normAspect; }
+        }
+      }
+
+      state.crop.w = Math.min(1, Math.max(0.15, w));
+      state.crop.h = Math.min(1, Math.max(0.15, h));
+      state.crop.x = (1 - state.crop.w) / 2;
+      state.crop.y = (1 - state.crop.h) / 2;
+      updateCropBoxDOM();
+    }
+
+    function updateCropBoxDOM() {
+      const { x, y, w, h } = state.crop;
+      el.cropBox.style.left = `${x * 100}%`;
+      el.cropBox.style.top = `${y * 100}%`;
+      el.cropBox.style.width = `${w * 100}%`;
+      el.cropBox.style.height = `${h * 100}%`;
+    }
+
+    async function applyCrop() {
+      if (!requirePhoto()) return;
+      const img = state.baseImage;
+      const sx = Math.round(state.crop.x * img.naturalWidth);
+      const sy = Math.round(state.crop.y * img.naturalHeight);
+      const sw = Math.max(20, Math.round(state.crop.w * img.naturalWidth));
+      const sh = Math.max(20, Math.round(state.crop.h * img.naturalHeight));
+
+      const off = document.createElement('canvas');
+      off.width = sw;
+      off.height = sh;
+      off.getContext('2d').drawImage(img, sx, sy, sw, sh, 0, 0, sw, sh);
+
+      state.baseImage = await loadImageFromSrc(off.toDataURL('image/png'));
+      initCropBox(state.crop.ratio);
+      renderCanvas();
+      pushHistory();
+      showToast('사진을 깔끔하게 잘랐어요!', 'success');
+    }
+
+    async function transformBaseImage(type) {
+      if (!requirePhoto()) return;
+      const img = state.baseImage;
+      const off = document.createElement('canvas');
+      const c = off.getContext('2d');
+
+      if (type === 'rotL' || type === 'rotR') {
+        off.width = img.naturalHeight;
+        off.height = img.naturalWidth;
+        c.translate(off.width / 2, off.height / 2);
+        c.rotate((type === 'rotR' ? 90 : -90) * Math.PI / 180);
+        c.drawImage(img, -img.naturalWidth / 2, -img.naturalHeight / 2);
+      } else if (type === 'flipH' || type === 'flipV') {
+        off.width = img.naturalWidth;
+        off.height = img.naturalHeight;
+        c.translate(type === 'flipH' ? off.width : 0, type === 'flipV' ? off.height : 0);
+        c.scale(type === 'flipH' ? -1 : 1, type === 'flipV' ? -1 : 1);
+        c.drawImage(img, 0, 0);
+      }
+
+      state.baseImage = await loadImageFromSrc(off.toDataURL('image/png'));
+      initCropBox(state.crop.ratio);
+      renderCanvas();
+      pushHistory();
+    }
+
+    // ===================== 텍스트 오버레이 및 굽기 =====================
+    function updateTextPreview() {
+      const t = state.text;
+      if (!t.content.trim()) {
+        el.draggableText.classList.add('hidden');
+        return;
+      }
+      el.draggableText.classList.remove('hidden');
+      el.draggableText.textContent = t.content;
+      el.draggableText.style.color = t.color;
+      el.draggableText.style.fontSize = `${t.size}px`;
+      el.draggableText.style.left = `${t.xPct}%`;
+      el.draggableText.style.top = `${t.yPct}%`;
+      el.draggableText.style.backgroundColor = t.bg ? 'rgba(11, 13, 18, 0.72)' : 'transparent';
+      el.draggableText.style.textShadow = t.bg ? 'none' : '0 2px 8px rgba(0,0,0,0.85)';
+    }
+
+    async function bakeTextToImage() {
+      if (!requirePhoto()) return;
+      const content = state.text.content.trim();
+      if (!content) {
+        showToast('먼저 사진에 넣을 문구를 입력해 주세요.', 'info');
+        return;
+      }
+
+      const img = state.baseImage;
+      const off = document.createElement('canvas');
+      off.width = img.naturalWidth;
+      off.height = img.naturalHeight;
+      const c = off.getContext('2d');
+      c.drawImage(img, 0, 0);
+
+      // 화면 표시 크기 대비 원본 해상도 비율로 폰트 크기 환산
+      const displayW = el.editorCanvas.getBoundingClientRect().width || 300;
+      const scaleFactor = off.width / displayW;
+      const fontSize = Math.round(state.text.size * scaleFactor);
+
+      c.font = `700 ${fontSize}px Inter, "Noto Sans KR", sans-serif`;
+      c.textAlign = 'center';
+      c.textBaseline = 'middle';
+
+      const tx = (state.text.xPct / 100) * off.width;
+      const ty = (state.text.yPct / 100) * off.height;
+
+      if (state.text.bg) {
+        const metrics = c.measureText(content);
+        const padX = fontSize * 0.45;
+        const padY = fontSize * 0.28;
+        const boxW = metrics.width + padX * 2;
+        const boxH = fontSize + padY * 2;
+        c.fillStyle = 'rgba(11, 13, 18, 0.72)';
+        c.beginPath();
+        c.roundRect(tx - boxW / 2, ty - boxH / 2, boxW, boxH, fontSize * 0.25);
+        c.fill();
+      } else {
+        c.shadowColor = 'rgba(0,0,0,0.85)';
+        c.shadowBlur = fontSize * 0.25;
+        c.shadowOffsetY = fontSize * 0.08;
+      }
+
+      c.fillStyle = state.text.color;
+      c.fillText(content, tx, ty);
+
+      state.baseImage = await loadImageFromSrc(off.toDataURL('image/png'));
+      state.text.content = '';
+      el.textInput.value = '';
+      updateTextPreview();
+      renderCanvas();
+      pushHistory();
+      showToast('텍스트를 사진에 적용했어요!', 'success');
+    }
+
+    // ===================== UI 동기화 및 동적 버튼 생성 =====================
+    function buildFilterButtons() {
+      el.filterList.innerHTML = '';
+      FILTERS.forEach(f => {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.dataset.filterId = f.id;
+        btn.className = 'filter-chip shrink-0 flex flex-col items-center gap-1 p-1.5 rounded-xl transition active:scale-95';
+        btn.innerHTML = `
+          <div class="w-11 h-11 rounded-xl bg-gradient-to-br ${f.swatch} border-2 border-transparent shadow-inner"></div>
+          <span class="text-[10px] font-medium text-slate-300">${f.name}</span>
+        `;
+        btn.addEventListener('click', () => {
+          if (!requirePhoto()) return;
+          state.filterId = f.id;
+          syncUiWithState();
+          renderCanvas();
+          pushHistory();
+        });
+        el.filterList.appendChild(btn);
+      });
+    }
+
+    function buildAdjustButtons() {
+      el.adjustList.innerHTML = '';
+      ADJUST_ITEMS.forEach(item => {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.dataset.adjustKey = item.key;
+        btn.className = 'adjust-chip shrink-0 px-3 py-1.5 rounded-xl text-xs font-medium transition active:scale-95';
+        btn.textContent = item.label;
+        btn.addEventListener('click', () => {
+          state.activeAdjustKey = item.key;
+          syncUiWithState();
+        });
+        el.adjustList.appendChild(btn);
+      });
+    }
+
+    function syncUiWithState() {
+      // 필터 선택 하이라이트
+      document.querySelectorAll('.filter-chip').forEach(btn => {
+        const active = btn.dataset.filterId === state.filterId;
+        const box = btn.querySelector('div');
+        const label = btn.querySelector('span');
+        box.classList.toggle('border-indigo-400', active);
+        box.classList.toggle('border-transparent', !active);
+        label.classList.toggle('text-indigo-300', active);
+        label.classList.toggle('text-slate-300', !active);
+      });
+      el.filterIntensitySlider.value = state.filterIntensity;
+      el.filterIntensityVal.textContent = `${state.filterIntensity}%`;
+
+      // 보정 항목 하이라이트 및 슬라이더 동기화
+      const activeItem = ADJUST_ITEMS.find(i => i.key === state.activeAdjustKey) || ADJUST_ITEMS[0];
+      document.querySelectorAll('.adjust-chip').forEach(btn => {
+        const key = btn.dataset.adjustKey;
+        const isActive = key === state.activeAdjustKey;
+        const isModified = state.adjustments[key] !== 0;
+        btn.className = `adjust-chip shrink-0 px-3 py-1.5 rounded-xl text-xs font-medium transition active:scale-95 ${
+          isActive
+            ? 'bg-indigo-600 text-white shadow-sm'
+            : isModified
+              ? 'bg-surface-800 text-indigo-300 border border-indigo-400/40'
+              : 'bg-surface-800 text-slate-300 border border-transparent'
+        }`;
+      });
+      el.adjustSlider.min = activeItem.min;
+      el.adjustSlider.max = activeItem.max;
+      const curVal = state.adjustments[activeItem.key];
+      el.adjustSlider.value = curVal;
+      el.adjustVal.textContent = curVal > 0 ? `+${curVal}` : `${curVal}`;
+
+      // 설정 모달 동기화
+      el.customApiKeyInput.value = state.customApiKey;
+      document.querySelectorAll('.format-btn').forEach(btn => {
+        const active = btn.dataset.format === state.exportFormat;
+        btn.className = `format-btn py-2 rounded-xl text-xs font-medium ${active ? 'bg-indigo-600 text-white' : 'bg-surface-800 text-slate-300'}`;
+      });
+    }
+
+    /** 하단 탭 전환 */
+    function switchTab(tabId) {
+      state.activeTab = tabId;
+      document.querySelectorAll('.tool-content').forEach(p => p.classList.add('hidden'));
+      document.getElementById(`panel-${tabId}`)?.classList.remove('hidden');
+
+      document.querySelectorAll('.nav-tab-btn').forEach(btn => {
+        const active = btn.dataset.tab === tabId;
+        btn.classList.toggle('text-indigo-400', active);
+        btn.classList.toggle('text-slate-400', !active);
+      });
+
+      // 전용 오버레이 토글
+      el.cropOverlay.classList.toggle('hidden', tabId !== 'crop' || !state.baseImage);
+      el.textOverlay.classList.toggle('hidden', tabId !== 'text' || !state.baseImage);
+
+      if (tabId === 'crop' && state.baseImage) {
+        initCropBox(state.crop.ratio);
+      }
+      if (tabId === 'text') {
+        updateTextPreview();
+      }
+    }
+
+    // ===================== 터치 / 마우스 드래그 인터랙션 =====================
+    function setupDragHandlers() {
+      // 1. 자르기 박스 드래그
+      let cropDragging = false;
+      let startX = 0, startY = 0, initX = 0, initY = 0;
+
+      const onCropStart = (e) => {
+        const pt = e.touches ? e.touches[0] : e;
+        cropDragging = true;
+        startX = pt.clientX;
+        startY = pt.clientY;
+        initX = state.crop.x;
+        initY = state.crop.y;
+        e.preventDefault();
+      };
+      const onCropMove = (e) => {
+        if (!cropDragging) return;
+        const pt = e.touches ? e.touches[0] : e;
+        const rect = el.cropOverlay.getBoundingClientRect();
+        const dx = (pt.clientX - startX) / rect.width;
+        const dy = (pt.clientY - startY) / rect.height;
+        state.crop.x = Math.max(0, Math.min(1 - state.crop.w, initX + dx));
+        state.crop.y = Math.max(0, Math.min(1 - state.crop.h, initY + dy));
+        updateCropBoxDOM();
+      };
+      const onCropEnd = () => { cropDragging = false; };
+
+      el.cropBox.addEventListener('mousedown', onCropStart);
+      el.cropBox.addEventListener('touchstart', onCropStart, { passive: false });
+      window.addEventListener('mousemove', onCropMove);
+      window.addEventListener('touchmove', onCropMove, { passive: false });
+      window.addEventListener('mouseup', onCropEnd);
+      window.addEventListener('touchend', onCropEnd);
+
+      // 2. 텍스트 위치 드래그
+      let textDragging = false;
+      const onTextStart = (e) => {
+        textDragging = true;
+        e.preventDefault();
+      };
+      const onTextMove = (e) => {
+        if (!textDragging) return;
+        const pt = e.touches ? e.touches[0] : e;
+        const rect = el.textOverlay.getBoundingClientRect();
+        const px = ((pt.clientX - rect.left) / rect.width) * 100;
+        const py = ((pt.clientY - rect.top) / rect.height) * 100;
+        state.text.xPct = Math.max(8, Math.min(92, px));
+        state.text.yPct = Math.max(8, Math.min(92, py));
+        updateTextPreview();
+      };
+      const onTextEnd = () => { textDragging = false; };
+
+      el.draggableText.addEventListener('mousedown', onTextStart);
+      el.draggableText.addEventListener('touchstart', onTextStart, { passive: false });
+      window.addEventListener('mousemove', onTextMove);
+      window.addEventListener('touchmove', onTextMove, { passive: false });
+      window.addEventListener('mouseup', onTextEnd);
+      window.addEventListener('touchend', onTextEnd);
+    }
+
+    // ===================== 이벤트 바인딩 =====================
+    function bindEvents() {
+      // 파일 선택
+      const triggerUpload = () => el.fileInput.click();
+      el.btnOpenPhoto.addEventListener('click', triggerUpload);
+      el.btnEmptyUpload.addEventListener('click', triggerUpload);
+      el.fileInput.addEventListener('change', (e) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = () => loadNewPhoto(reader.result);
+        reader.readAsDataURL(file);
+        e.target.value = '';
+      });
+
+      // 샘플 사진 로드
+      el.btnLoadSample.addEventListener('click', () => {
+        loadNewPhoto(generateSamplePhoto());
+      });
+
+      // Undo / Redo
+      el.btnUndo.addEventListener('click', () => restoreHistoryAt(state.historyIndex - 1));
+      el.btnRedo.addEventListener('click', () => restoreHistoryAt(state.historyIndex + 1));
+
+      // 원본 비교 (길게 누르기)
+      const startCompare = (e) => {
+        if (!state.originalImage) return;
+        e.preventDefault();
+        state.isComparing = true;
+        el.originalBadge.classList.remove('hidden');
+        renderCanvas();
+      };
+      const endCompare = () => {
+        if (!state.isComparing) return;
+        state.isComparing = false;
+        el.originalBadge.classList.add('hidden');
+        renderCanvas();
+      };
+      el.btnCompare.addEventListener('mousedown', startCompare);
+      el.btnCompare.addEventListener('touchstart', startCompare, { passive: false });
+      window.addEventListener('mouseup', endCompare);
+      window.addEventListener('touchend', endCompare);
+
+      // 하단 탭 네비게이션
+      document.querySelectorAll('.nav-tab-btn').forEach(btn => {
+        btn.addEventListener('click', () => switchTab(btn.dataset.tab));
+      });
+
+      // AI 이벤트
+      el.btnAiAutoEnhance.addEventListener('click', runAiAutoEnhance);
+      document.querySelectorAll('.ai-preset-btn').forEach(btn => {
+        btn.addEventListener('click', () => runAiMagicEdit(btn.dataset.aiPrompt));
+      });
+      el.btnAiPromptRun.addEventListener('click', () => runAiMagicEdit(el.aiPromptInput.value));
+      el.aiPromptInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') runAiMagicEdit(el.aiPromptInput.value);
+      });
+
+      // 필터 강도 슬라이더
+      el.filterIntensitySlider.addEventListener('input', (e) => {
+        state.filterIntensity = Number(e.target.value);
+        el.filterIntensityVal.textContent = `${state.filterIntensity}%`;
+        renderCanvas();
+      });
+      el.filterIntensitySlider.addEventListener('change', () => pushHistory());
+
+      // 세부 보정 슬라이더
+      el.adjustSlider.addEventListener('input', (e) => {
+        if (!state.baseImage) return;
+        const val = Number(e.target.value);
+        state.adjustments[state.activeAdjustKey] = val;
+        el.adjustVal.textContent = val > 0 ? `+${val}` : `${val}`;
+        renderCanvas();
+      });
+      el.adjustSlider.addEventListener('change', () => {
+        syncUiWithState();
+        pushHistory();
+      });
+      el.btnResetSingleAdjust.addEventListener('click', () => {
+        if (!requirePhoto()) return;
+        state.adjustments[state.activeAdjustKey] = 0;
+        syncUiWithState();
+        renderCanvas();
+        pushHistory();
+      });
+
+      // 자르기 / 회전 이벤트
+      document.querySelectorAll('.crop-ratio-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+          document.querySelectorAll('.crop-ratio-btn').forEach(b => {
+            b.className = 'crop-ratio-btn shrink-0 px-3 py-1.5 rounded-xl bg-surface-800 text-slate-300 text-xs font-medium';
+          });
+          btn.className = 'crop-ratio-btn shrink-0 px-3 py-1.5 rounded-xl bg-indigo-600 text-white text-xs font-medium';
+          initCropBox(btn.dataset.ratio);
+        });
+      });
+      el.cropScaleSlider.addEventListener('input', () => initCropBox(state.crop.ratio));
+      el.btnApplyCrop.addEventListener('click', applyCrop);
+      el.btnRotateLeft.addEventListener('click', () => transformBaseImage('rotL'));
+      el.btnRotateRight.addEventListener('click', () => transformBaseImage('rotR'));
+      el.btnFlipH.addEventListener('click', () => transformBaseImage('flipH'));
+      el.btnFlipV.addEventListener('click', () => transformBaseImage('flipV'));
+
+      // 텍스트 이벤트
+      el.textInput.addEventListener('input', (e) => {
+        state.text.content = e.target.value;
+        updateTextPreview();
+      });
+      el.btnInsertDate.addEventListener('click', () => {
+        const now = new Date();
+        const stamp = `${now.getFullYear()}.${String(now.getMonth() + 1).padStart(2, '0')}.${String(now.getDate()).padStart(2, '0')}`;
+        el.textInput.value = stamp;
+        state.text.content = stamp;
+        state.text.color = '#FBBF24';
+        state.text.xPct = 78;
+        state.text.yPct = 88;
+        updateTextPreview();
+      });
+      document.querySelectorAll('.text-color-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+          document.querySelectorAll('.text-color-btn').forEach(b => b.classList.remove('ring-2', 'ring-indigo-400'));
+          btn.classList.add('ring-2', 'ring-indigo-400');
+          state.text.color = btn.dataset.color;
+          updateTextPreview();
+        });
+      });
+      el.textSizeSlider.addEventListener('input', (e) => {
+        state.text.size = Number(e.target.value);
+        updateTextPreview();
+      });
+      el.btnToggleTextBg.addEventListener('click', () => {
+        state.text.bg = !state.text.bg;
+        el.btnToggleTextBg.textContent = state.text.bg ? '배경 ON' : '배경 OFF';
+        el.btnToggleTextBg.classList.toggle('text-indigo-300', state.text.bg);
+        updateTextPreview();
+      });
+      el.btnApplyText.addEventListener('click', bakeTextToImage);
+
+      // 설정 모달
+      el.btnSettings.addEventListener('click', () => {
+        syncUiWithState();
+        el.settingsModal.classList.remove('hidden');
+      });
+      el.btnCloseSettings.addEventListener('click', () => el.settingsModal.classList.add('hidden'));
+      document.querySelectorAll('.format-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+          state.exportFormat = btn.dataset.format;
+          syncUiWithState();
+        });
+      });
+      el.btnSaveSettings.addEventListener('click', () => {
+        state.customApiKey = el.customApiKeyInput.value.trim();
+        if (state.customApiKey) {
+          localStorage.setItem('ai_photo_custom_key', state.customApiKey);
+        } else {
+          localStorage.removeItem('ai_photo_custom_key');
+        }
+        el.settingsModal.classList.add('hidden');
+        showToast('설정이 저장되었습니다.', 'success');
+      });
+      el.btnResetAllEdits.addEventListener('click', () => {
+        if (!requirePhoto()) return;
+        state.baseImage = state.originalImage;
+        state.adjustments = { ...DEFAULT_ADJUSTMENTS };
+        state.filterId = 'none';
+        state.filterIntensity = 100;
+        syncUiWithState();
+        renderCanvas();
+        pushHistory();
+        el.settingsModal.classList.add('hidden');
+        showToast('최초 원본 사진으로 복원했습니다.', 'info');
+      });
+
+      // 내보내기 및 안드로이드 공유
+      el.btnExport.addEventListener('click', () => {
+        if (!requirePhoto()) return;
+        const ext = state.exportFormat === 'image/png' ? 'png' : 'jpg';
+        const dataUrl = renderCurrentToDataUrl(2200, state.exportFormat, 0.94);
+
+        // Blob 변환 (다운로드 및 Web Share API 공용)
+        fetch(dataUrl).then(r => r.blob()).then(blob => {
+          state.lastExportBlob = { blob, ext, dataUrl };
+          // 안드로이드 크롬 파일 공유 지원 여부 확인
+          const canShare = !!(navigator.canShare && navigator.canShare({
+            files: [new File([blob], `ai_photo.${ext}`, { type: state.exportFormat })]
+          }));
+          el.btnShareFinal.classList.toggle('hidden', !canShare);
+          el.exportModal.classList.remove('hidden');
+        });
+      });
+
+      el.btnDownloadFinal.addEventListener('click', () => {
+        if (!state.lastExportBlob) return;
+        const { dataUrl, ext } = state.lastExportBlob;
+        const a = document.createElement('a');
+        a.href = dataUrl;
+        a.download = `AI_Photo_${Date.now()}.${ext}`;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        el.exportModal.classList.add('hidden');
+        showToast('사진이 기기에 다운로드되었습니다!', 'success');
+      });
+
+      el.btnShareFinal.addEventListener('click', async () => {
+        if (!state.lastExportBlob) return;
+        try {
+          const { blob, ext } = state.lastExportBlob;
+          const file = new File([blob], `AI_Photo_${Date.now()}.${ext}`, { type: state.exportFormat });
+          await navigator.share({ files: [file], title: 'AI 포토 스튜디오 편집 사진' });
+          el.exportModal.classList.add('hidden');
+        } catch (err) {
+          // 사용자가 공유를 취소한 경우 무시
+        }
+      });
+
+      el.btnCloseExport.addEventListener('click', () => el.exportModal.classList.add('hidden'));
+
+      // 안드로이드 PWA 설치 배너 이벤트 감지
+      window.addEventListener('beforeinstallprompt', (e) => {
+        e.preventDefault();
+        state.deferredPrompt = e;
+        el.btnInstallPwa.classList.remove('hidden');
+      });
+      el.btnInstallPwa.addEventListener('click', async () => {
+        if (!state.deferredPrompt) return;
+        state.deferredPrompt.prompt();
+        await state.deferredPrompt.userChoice;
+        state.deferredPrompt = null;
+        el.btnInstallPwa.classList.add('hidden');
+      });
+
+      // 화면 크기 / 가로세로 회전 대응
+      window.addEventListener('resize', () => {
+        renderCanvas();
+      });
+    }
+
+    // ===================== 앱 초기화 =====================
+    window.addEventListener('load', () => {
+      buildFilterButtons();
+      buildAdjustButtons();
+      setupDragHandlers();
+      bindEvents();
+      syncUiWithState();
+      updateToolbarButtons();
+    });
+  </script>
+</body>
+</html>
+```
